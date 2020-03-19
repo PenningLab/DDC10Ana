@@ -1,4 +1,4 @@
-name: ocs
+name: DDC10Ana
 channels:
   - conda-forge
   - defaults
