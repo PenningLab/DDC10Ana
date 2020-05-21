@@ -21,7 +21,7 @@ class IODDC10:
 			self.tn.write(b"smbmount //192.168.1.2/SHARE /mnt/share -o username=lzer\n")
 			self.tn.read_until(b"Password: ")
 			self.tn.write(self.password.encode('ascii') + b"\n")
-			passtst = self.tn.read_until(b"SMB connection failed").decode('ascii')
+			passtst = self.tn.read_until(b"SMB connection failed",timeout=2).decode('ascii')
 			if len(passtst)==0:
 				self.RFA = True
 				print("Ready for Acquisition")
@@ -60,4 +60,4 @@ def DoExp(nSam,nEvs,chMask,nFiles,OutName):
 	mDDC10.setupDDC10()
 	today = date.today()
 	mDDC10.loopAcq(nFiles=nFiles,outDir="{0}_{1}_{2}_samples_{3}_events".format(OutName,today.strftime("%y%m%d"),nSam,nEvs))
-	self.tn.close()
+	mDDC10.tn.close()
