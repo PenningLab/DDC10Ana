@@ -1,11 +1,11 @@
 import getpass
 import telnetlib
 import time
+from datetime import date
 
 class IODDC10:
-	def __init__(self,HOST="192.168.1.3",nSam=8192,nEvs=10000,chMask='0x1',password=None):
+	def __init__(self,HOST="192.168.1.3",nSam=8192,nEvs=10000,chMask='0x1'):
 		self.HOST = HOST
-		self.password = password
 		self.RFA = False
 		self.nSam = nSam
 		self.nEvs = nEvs
@@ -24,6 +24,7 @@ class IODDC10:
 			passtst = self.tn.read_until(b"SMB connection failed").decode('ascii')
 			if len(passtst)==0:
 				self.RFA = True
+				print("Ready for Acquisition")
 			else:
 				print(passtst)
 		else:
@@ -46,10 +47,17 @@ class IODDC10:
 		else:
 			print("Not Ready For Acquisition!!!!\nHAVE YOU RUN SETUP?\n")
 
-	def loopAcq(self,nFiles=5,outFile='data'):
+	def loopAcq(self,nFiles=5,outDir='data'):
 		if self.RFA:
 			for i in range(nFiles):
-				self.runAcq(outFile.encode(ascii)+b"_{}\n".format(i))
+				self.runAcq(outDir.encode(ascii)+b"/{}\n".format(i))
 				print("Completed file {}".format(i))
 		else:
 			print("Not Ready For Acquisition!!!!\nHAVE YOU RUN SETUP?\n")
+
+def DoExp(nSam,nEvs,chMask,nFiles,OutName):
+	mDDC10 = IODDC10(nSam=nSam,nEvs=nEvs,chMask=chMask)
+	mDDC10.setupDDC10()
+	today = date.today()
+	mDDC10.loopAcq(nFiles=nFiles,outDir="{0}_{1}_{2}_samples_{3}_events".format(OutName,today.strftime("%y%m%d"),nSam,nEvs))
+	self.tn.close()
