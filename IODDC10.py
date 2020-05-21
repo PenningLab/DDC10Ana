@@ -31,7 +31,7 @@ class IODDC10:
 			print("Invalid password Set")
 
 		self.tn.write(b"ls /mnt/share\n")
-		self.tn.write(b"fadc_AD9648 {}\n".format(fade))
+		self.tn.write("fadc_AD9648 {}\n".format(fade).encode('ascii'))
 
 		print(self.tn.read_lazy().decode('ascii'))
 
@@ -50,7 +50,7 @@ class IODDC10:
 	def loopAcq(self,nFiles=5,outDir='data'):
 		if self.RFA:
 			for i in range(nFiles):
-				self.runAcq(outDir.encode(ascii)+b"/{}\n".format(i))
+				self.runAcq("{0}/{1}\n".format(outDir,i))
 				print("Completed file {}".format(i))
 		else:
 			print("Not Ready For Acquisition!!!!\nHAVE YOU RUN SETUP?\n")
