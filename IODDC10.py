@@ -18,22 +18,25 @@ class IODDC10:
 		self.password = getpass.getpass()
 
 		if self.password:
-			self.tn.write(b"smbmount //192.168.1.2/SHARE /mnt/share -o username=lzer\n")
+			self.tn.write(b"smbmount //192.168.1.100/SHARE /mnt/share -o username=lzer\n")
 			self.tn.read_until(b"Password: ")
 			self.tn.write(self.password.encode('ascii') + b"\n")
-			passtst = self.tn.read_until(b"SMB connection failed",timeout=2).decode('ascii')
-			if len(passtst)==0:
+			self.tn.write(b"echo \"-------\"\n")
+			passtst = self.tn.read_until(b"-------").decode('ascii')
+			if len(passtst)>len("-------"):
 				self.RFA = True
 				print("Ready for Acquisition")
 			else:
+				print("SMB Failed somehow")
 				print(passtst)
 		else:
 			print("Invalid password Set")
 
 		self.tn.write(b"ls /mnt/share\n")
 		self.tn.write("fadc_AD9648 {}\n".format(fade).encode('ascii'))
+		self.tn.write(b"echo \"-------\"\n")
 
-		print(self.tn.read_lazy().decode('ascii'))
+		print(self.tn.read_until(b"-------").decode('ascii'))
 
 	def runAcq(self,outFile='data'):
 		if self.RFA:
@@ -43,12 +46,13 @@ class IODDC10:
 			self.tn.read_until(b"sys")
 			with open(outFile+".log",'a') as logfile:
 				logfile.write(str(runStart)+"\n")
-			print(self.tn.read_lazy().decode('ascii'))
+			print(self.tn.read_eager().decode('ascii'))
 		else:
 			print("Not Ready For Acquisition!!!!\nHAVE YOU RUN SETUP?\n")
 
 	def loopAcq(self,nFiles=5,outDir='data'):
 		if self.RFA:
+			self.tn.write("mkdir -p {}\n".format(outDir).encode('ascii'))
 			for i in range(nFiles):
 				self.runAcq("{0}/{1}\n".format(outDir,i))
 				print("Completed file {}".format(i))
