@@ -4,7 +4,7 @@ import time
 from datetime import date
 
 class IODDC10:
-	def __init__(self,HOST="192.168.1.3",nSam=8192,nEvs=10000,chMask='0x1',dataDir='/data/share/'):
+	def __init__(self,HOST="192.168.1.3",nSam=8192,nEvs=10000,chMask='0x1',dataDir='/data/share/',password=None):
 		self.HOST = HOST
 		self.RFA = False
 		self.nSam = nSam
@@ -13,7 +13,10 @@ class IODDC10:
 		self.dataDir = dataDir
 		self.tn = telnetlib.Telnet(self.HOST)
 		print(self.tn.read_until(b'commands.',timeout=3).decode('ascii'))
-		self.password = getpass.getpass()
+		if password is None:
+			self.password = getpass.getpass()
+		else:
+			self.password = password
 
 	def setupDDC10(self,fade=5):
 		self.tn.write(b"mkdir -p /mnt/share\n")
@@ -74,9 +77,18 @@ class IODDC10:
 		else:
 			print("Not Ready For Acquisition!!!!\nHAVE YOU RUN SETUP?\n")
 
-def DoExp(nSam,nEvs,chMask,nFiles,OutName):
-	mDDC10 = IODDC10(nSam=nSam,nEvs=nEvs,chMask=chMask)
+def DoExp(nSam,nEvs,chMask,nFiles,OutName,password=None):
+	mDDC10 = IODDC10(nSam=nSam,nEvs=nEvs,chMask=chMask,password=password)
 	mDDC10.setupDDC10()
 	today = date.today()
+	print('Date: {}'.format(today.strftime("%y%m%d")))
 	mDDC10.loopAcq(nFiles=nFiles,outDir="{0}_{1}_{2}_samples_{3}_events".format(OutName,today.strftime("%y%m%d"),nSam,nEvs))
 	mDDC10.tn.close()
+
+def dailyExp(nSam,nEvs,chMask,nFiles,OutName,nDays=2,password=None):
+	day=0
+	while day<nDays:
+		DoExp(nSam,nEvs,chMask,nFiles,OutName,password)
+		day += 1
+		print('sleeping')
+		time.sleep(86000)
