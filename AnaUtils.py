@@ -43,38 +43,57 @@ def Subtract_Baseline(waveArr,nBase=150):
     
     return subtwaveArr,(waveBaseline,waveBaserms)
 
-def BaseCut(waveArr,baseD,cut=6):
-    mask = waveArr>6*baseD[1]
-
-def winQHist(wave,ch=0,init=175,end=250,nBins=10000,hrange=[-10,250],sub=True):
+from collections.abc import Iterable
+def winQHist(wave,ch=0,init=175,end=250,nBins=10000,hrange=None,sub=False,evMask=True):
     if sub:
         wave[0],baseD = Subtract_Baseline(wave[0])
     sumax = len(wave[0][:,ch,:].shape)-1
-    qArr = 1e3*integrate.simps(wave[0][:,ch,init:end],axis=sumax)*sampleWidth_ns/resistance_ohm
+    wmask=1
+    if isinstance(init,Iterable):
+        wmask1 = np.indices(wave[0][:,0].shape)[1]>init[...,np.newaxis]
+        wmask *= wmask1
+    else:
+        wmask1 = np.indices(wave[0][:,0].shape)[1]>init
+        wmask *= wmask1
+    if isinstance(end,Iterable): 
+        wmask1 = np.indices(wave[0][:,0].shape)[1]<end[...,np.newaxis]
+        wmask *= wmask1
+    else:
+        wmask1 = np.indices(wave[0][:,0].shape)[1]<end
+        wmask *= wmask1
+    qArr = 1e3*integrate.simps(evMask*wmask*wave[0][:,ch])*sampleWidth_ns/resistance_ohm
     ret = {'qData':qArr}
-    ret['qHist'] = np.histogram(qArr,bins=nBins,range=hrange,weights=np.ones(shape=qArr.shape)/wave[1]['totliveTime_s'])
+    tmpQ = list(np.histogram(qArr,bins=nBins,range=hrange,weights=np.ones(shape=qArr.shape)/wave[1]['totliveTime_s']))
+    tmpQ[1] = (tmpQ[1][1:]+tmpQ[1][:-1])/2.0
+    ret['qHist'] = tuple(tmpQ)
     return ret
 
 import matplotlib as mpl
 from pylab import rcParams
 rcParams['figure.figsize'] = 15, 11
-def peakHist(waveArr,chan=0,yrange=(-1,1),yscale=1):
+mpl.rc('axes.formatter', useoffset=False)
+def peakHist(waveArr,chan=0,yrange=None,yscale=1,ret=False,doplot=True):
     peakT = np.argmax(np.absolute(waveArr[0][:,chan,:]),axis=1)
-    peakV = np.array([waveArr[0][ev,chan,peakT[ev]] for ev in range(waveArr[1]['numEvents'])])*1e3
-    pHist = np.histogram2d(peakT,peakV,bins=[waveArr[1]['numSamples'],int(adccperVolt/yscale)],range=[[0,waveArr[1]['numSamples']],[-1e3,1e3]])
-    plt.pcolormesh(pHist[1][:-1],pHist[2][:-1],np.transpose(pHist[0])/waveArr[1]['totliveTime_s'],norm=mpl.colors.LogNorm())
-    cbar = plt.colorbar()
-    plt.xlabel("peak Time (samples)")
-    plt.ylabel("peak Amplitude (mV)")
-    plt.ylim(yrange)
-    plt.show()
-    plt.plot(pHist[1][:-1],np.sum(pHist[0],axis=1))
-    plt.xlabel("peak Time (samples)")
-    plt.show()
-    plt.plot(pHist[2][:-1],np.sum(pHist[0],axis=0))
-    plt.xlabel("peak Amplitude (mV)")
-    plt.show()
-    return pHist
+    peakV = waveArr[0][np.arange(0,waveArr[1]['numEvents']),chan,peakT]*1e3
+    pHist = np.histogram2d(peakT,peakV,bins=[waveArr[1]['numSamples'],int(adccperVolt/yscale)])
+    if doplot:
+        plt.pcolormesh(pHist[1][:-1],pHist[2][:-1],np.transpose(pHist[0])/waveArr[1]['totliveTime_s'],norm=mpl.colors.LogNorm())
+        cbar = plt.colorbar()
+        plt.xlabel("peak Time (samples)")
+        plt.ylabel("peak Amplitude (mV)")
+        if isinstance(yrange,(tuple,list)):
+            plt.ylim(yrange)
+        plt.show()
+        plt.plot(pHist[1][:-1],np.sum(pHist[0],axis=1))
+        plt.xlabel("peak Time (samples)")
+        plt.show()
+        plt.plot(pHist[2][:-1],np.sum(pHist[0],axis=0))
+        plt.xlabel("peak Amplitude (mV)")
+        plt.show()
+    if ret:
+        return pHist,peakT,peakV
+    else:
+        return pHist
 
 def plotWaves(waveArr,chan=0,nWaves=100):
     plt.figure()
