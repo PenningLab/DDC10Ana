@@ -9,7 +9,8 @@ def extRun(fname,nbase,winS,winF,cut=4,pmt=1,trigM=100,qbins=1000,ret=False,plot
     waves[0],base = au.Subtract_Baseline(waves[0],nBase=nbase)
     #require baseline has no pulse. i.e. integral over baseline less than cut*rms
     bmask = np.absolute(integrate.simps(waves[0][:,pmt,:nbase]))<cut*integrate.simps(np.ones(nbase))*base[1][:,pmt]
-
+    if plot:
+        au.plotWaves(waves[0],pmt,1000)
     TrigPeaks = au.peakHist(waves,chan=0,ret=True,doplot=plot)
     PromptPeak = au.peakHist(waves,chan=pmt,ret=True,doplot=plot)
     

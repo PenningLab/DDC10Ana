@@ -12,19 +12,23 @@ sampleWidth_ns = 10
 
 def ReadDDC10_BinWave(fName, doTime=True):
     waveInfo = {}
-    fp = open(fName+'.bin','rb')
-    Header = np.fromfile(fp,dtype=np.uint32,count=4)
+    try:
+        with open(fName+'.bin','rb') as fp:
+            Header = np.fromfile(fp,dtype=np.uint32,count=4)
+
+            waveInfo['numEvents'] = int(Header[0])
+            waveInfo['numSamples'] = int(Header[1])
+            waveInfo['chMap'] = np.array([1 if digit=='1' else 0 for digit in bin(Header[2])[2:]])
+            waveInfo['numChan'] = np.sum(waveInfo['chMap'])
+            byteOrderPattern = hex(int(np.fromfile(fp,dtype=np.uint32,count=1)))
+
+            waveArr = np.empty((waveInfo['numEvents']*waveInfo['numChan']*(waveInfo['numSamples']+6)),dtype=np.int16)
+            waveArr[:-2] = np.fromfile(fp,dtype=np.int16)
+    except ValueError as e:
+        print(e)
+        return None
     
-    waveInfo['numEvents'] = int(Header[0])
-    waveInfo['numSamples'] = int(Header[1])
-    waveInfo['chMap'] = np.array([1 if digit=='1' else 0 for digit in bin(Header[2])[2:]])
-    waveInfo['numChan'] = np.sum(waveInfo['chMap'])
-    byteOrderPattern = hex(int(np.fromfile(fp,dtype=np.uint32,count=1)))
-    
-    tmpArr = np.concatenate((np.fromfile(fp,dtype=np.int16),np.zeros(2)))
-    fp.close()
-    
-    waveArr = np.reshape(tmpArr.astype(dtype=np.float64)/adccperVolt,(waveInfo['numEvents'],waveInfo['numChan'],(waveInfo['numSamples']+6)))[...,2:-4]
+    waveArr = np.reshape(waveArr.astype(dtype=np.float64)/adccperVolt,(waveInfo['numEvents'],waveInfo['numChan'],(waveInfo['numSamples']+6)))[...,2:-4]
 
     if doTime:
         with open(fName+'.log','r') as fl:
@@ -34,7 +38,7 @@ def ReadDDC10_BinWave(fName, doTime=True):
     return [waveArr,waveInfo]
 
 
-def Subtract_Baseline(waveArr,nBase=150):
+def Subtract_Baseline(waveArr,nBase=50):
     baseWave = waveArr[...,:nBase]
     sumax = len(waveArr.shape)-1
     waveBaseline = np.sum(baseWave,axis = sumax)/nBase
@@ -44,9 +48,9 @@ def Subtract_Baseline(waveArr,nBase=150):
     return subtwaveArr,(waveBaseline,waveBaserms)
 
 from collections.abc import Iterable
-def winQHist(wave,ch=0,init=175,end=250,nBins=10000,hrange=None,sub=False,evMask=True):
+def winQHist(wave,ch=0,init=175,end=250,nBins=10000,hrange=None,sub=False,evMask=True,nBase=50):
     if sub:
-        wave[0],baseD = Subtract_Baseline(wave[0])
+        wave[0],baseD = Subtract_Baseline(wave[0],nBase)
     sumax = len(wave[0][:,ch,:].shape)-1
     wmask=1
     if isinstance(init,Iterable):
@@ -107,7 +111,7 @@ def plotWaves(waveArr,chan=0,nWaves=100):
     plt.xlabel('samples (10ns)')
     plt.ylabel('V')
     plt.show()
-    
+    return plt.gcf()
     
 #Pulse Finding 
 #create kernel for Laplacian of Gaussian edge finding filter
@@ -149,6 +153,7 @@ def zero_crossing(mLoG,thresh,window=3):
 
 #Now sort through candidate edges
 #Maybe integrate from every left edge to every right edge (one sided search)
+#Find minima between left right edge pairs
 #Set a min threshold for the integral
 #All edge combinations with integral above threshold kept
 #Sort kept ranges by size

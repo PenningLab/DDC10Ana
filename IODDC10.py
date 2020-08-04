@@ -18,7 +18,7 @@ class IODDC10:
 		else:
 			self.password = password
 
-	def setupDDC10(self,fade=5):
+	def setupDDC10(self,fade=6):
 		self.tn.write(b"ls /mnt/share\n")
 		pout = self.tn.read_eager().decode('ascii')
 		pout += self.tn.read_until(b'root:/>',timeout=3).decode('ascii')
@@ -83,6 +83,11 @@ class IODDC10:
 				print("Completed file {}".format(i))
 		else:
 			print("Not Ready For Acquisition!!!!\nHAVE YOU RUN SETUP?\n")
+
+def setupDD(password='123'):
+	mDDC10 = IODDC10(password=password)
+	mDDC10.setupDDC10(fade=6)
+	mDDC10.tn.close()
 
 def DoSingle(nSam,nEvs,chMask,OutName,password='123'):
 	mDDC10 = IODDC10(nSam=nSam,nEvs=nEvs,chMask=chMask,password=password)
