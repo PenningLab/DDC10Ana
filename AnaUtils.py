@@ -20,6 +20,7 @@ def ReadDDC10_BinWave(fName, doTime=True):
             waveInfo['numSamples'] = int(Header[1])
             waveInfo['chMap'] = np.array([1 if digit=='1' else 0 for digit in bin(Header[2])[2:]])
             waveInfo['numChan'] = np.sum(waveInfo['chMap'])
+            waveInfo['file'] = fName
             byteOrderPattern = hex(int(np.fromfile(fp,dtype=np.uint32,count=1)))
 
             waveArr = np.empty((waveInfo['numEvents']*waveInfo['numChan']*(waveInfo['numSamples']+6)),dtype=np.int16)
@@ -48,30 +49,42 @@ def Subtract_Baseline(waveArr,nBase=50):
     return subtwaveArr,(waveBaseline,waveBaserms)
 
 from collections.abc import Iterable
-def winQHist(wave,ch=0,init=175,end=250,nBins=10000,hrange=None,sub=False,evMask=True,nBase=50):
+def winQHist(wave,ch,init=175,end=250,nBins=10000,hrange=None,sub=False,evMask=True,nBase=50,doLive=True,binW=0):
     if sub:
         wave[0],baseD = Subtract_Baseline(wave[0],nBase)
     sumax = len(wave[0][:,ch,:].shape)-1
     wmask=1
     if isinstance(init,Iterable):
-        wmask1 = np.indices(wave[0][:,0].shape)[1]>init[...,np.newaxis]
+        wmask1 = np.indices(wave[0][:,ch].shape)[1]>init[...,np.newaxis]
         wmask *= wmask1
     else:
-        wmask1 = np.indices(wave[0][:,0].shape)[1]>init
+        wmask1 = np.indices(wave[0][:,ch].shape)[1]>init
         wmask *= wmask1
     if isinstance(end,Iterable): 
-        wmask1 = np.indices(wave[0][:,0].shape)[1]<end[...,np.newaxis]
+        wmask1 = np.indices(wave[0][:,ch].shape)[1]<end[...,np.newaxis]
         wmask *= wmask1
     else:
-        wmask1 = np.indices(wave[0][:,0].shape)[1]<end
+        wmask1 = np.indices(wave[0][:,ch].shape)[1]<end
         wmask *= wmask1
     qArr = 1e3*integrate.simps(evMask*wmask*wave[0][:,ch])*sampleWidth_ns/resistance_ohm
     ret = {'qData':qArr}
+    if isinstance(hrange,Iterable):
+        bRange = hrange[1]-hrange[0]
+    else:
+        bRange = np.amax(qArr)-np.amin(qArr)
+    if binW>0:
+        nBins = int(bRange/binW)
     tmpQ = list(np.histogram(qArr,bins=nBins,range=hrange))
     tmpQ[0] = tmpQ[0].astype(float)
-    tmpQ.append(tmpQ[0]/np.square(float(wave[1]['totliveTime_s'])))
-    tmpQ[0] *= 1.0/float(wave[1]['totliveTime_s'])
+    bWidth = (tmpQ[1][-1] - tmpQ[1][0])/float(nBins)
+    bTot = tmpQ[0].sum()
+    bNorm = bTot*bWidth
     tmpQ[1] = (tmpQ[1][1:]+tmpQ[1][:-1])/2.0
+    tmpQ.append(tmpQ[0]*np.square(1.0/bNorm))
+    tmpQ[0] *= 1.0/bNorm
+    if doLive:
+        tmpQ[0] *= bTot/float(wave[1]['totliveTime_s'])
+        tmpQ[2] *= np.square(bTot/float(wave[1]['totliveTime_s']))
     tmpQ.append(np.nonzero(tmpQ[2])[0])
     
     ret['qHist'] = tuple(tmpQ)
