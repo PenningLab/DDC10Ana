@@ -4,7 +4,7 @@ from scipy import integrate
 from scipy.optimize import curve_fit
 import AnaUtils as au
 
-def extRun(fname,nbase,winS,winF,cut=4,pmt=1,trigM=100,qbins=1000,ret=False,plot=False):
+def extRun(fname,nbase,winS,winF,cut=4,pmt=1,trigM=100,qbins=1000,qW = 0,ret=False,plot=False):
     waves = au.ReadDDC10_BinWave(fname)
     waves[0],base = au.Subtract_Baseline(waves[0],nBase=nbase)
     #require baseline has no pulse. i.e. integral over baseline less than cut*rms
@@ -21,7 +21,7 @@ def extRun(fname,nbase,winS,winF,cut=4,pmt=1,trigM=100,qbins=1000,ret=False,plot
     wFin = TrigPeaks[1]+Trigshift+winF
     evmask = bmask*tmask
 
-    Qhist = au.winQHist(waves,ch=pmt,init=wStart.astype(int),end=wFin.astype(int),nBins=qbins,evMask=evmask[...,np.newaxis])
+    Qhist = au.winQHist(waves,ch=pmt,init=wStart.astype(int),end=wFin.astype(int),nBins=qbins,binW = qW,evMask=evmask[...,np.newaxis])
     if ret:
         Qhist['waves'] = waves[0][:,pmt]
         Qhist['trgT'] = TrigPeaks[1]
