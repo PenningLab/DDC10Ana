@@ -2,6 +2,7 @@ import numpy as np
 import uproot
 import matplotlib.pyplot as plt
 from scipy import integrate
+import awkward as awk
 from pylab import rcParams
 rcParams['figure.figsize'] = 15, 11
 
@@ -36,6 +37,7 @@ def ReadDDC10_BinWave(fName, doTime=True):
             waveInfo['liveTimes_s'] = np.loadtxt(fl,delimiter=',',skiprows=5,max_rows=waveInfo['numEvents'],usecols=(2),dtype=np.float64)/(ClockDDC10)
             waveInfo['totliveTime_s'] = np.sum(waveInfo['liveTimes_s'])
             
+    print(waveInfo)
     return [waveArr,waveInfo]
 
 
@@ -148,20 +150,25 @@ def mmg_rolling(a, window):
     shape = a.shape[:axis] + (a.shape[axis] - window + 1, window)
     strides = a.strides + (a.strides[-1],)
     rolling = np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
-    grad = rolling[...,-1]-rolling[...,0]
-    return np.max(rolling,axis=axis),np.min(rolling,axis=axis),grad/(window-1.0)
+    grad = (rolling[...,-1]-rolling[...,0])/float(window-1.0)
+    return np.max(rolling,axis=axis),np.min(rolling,axis=axis),grad
 
 #zero crossings of filtered waveform are candidate edges, gradient discriminates rising edge v falling edge candidates
 #-1 elements are rising edge candidates and +1 elements are falling edge candidates
-def zero_crossing(mLoG,thresh,window=3):
+def zero_crossing(mLoG,mWave,thresh,window=3):
     maxL,minL,gradL = mmg_rolling(mLoG,window)
+    #print(grad2L,gradL)
     pzero = (mLoG[...,1:-1]>0)
     zeroCross = np.zeros(shape=mLoG.shape).astype(np.int)
     zeroCross[...,1:-1] = pzero*(minL<0) + (1-pzero)*(maxL>0)
     diffL = maxL-minL
     zeroCross[...,1:-1] = zeroCross[...,1:-1]*(diffL > thresh)
     zeroCross[...,1:-1] = ((gradL>thresh/window).astype(np.int)-(gradL<-thresh/window).astype(np.int))*zeroCross[...,1:-1]
-    return zeroCross,np.array(np.nonzero(zeroCross))
+    
+    #zeroCross[zeroCross==0] = np.nan
+    lEd = awk.fromiter([np.nonzero(zi)[0] for zi in zeroCross<0])
+    rEd = awk.fromiter([np.nonzero(zi)[0] for zi in zeroCross>0])
+    return (lEd,rEd),np.pad(gradL,[(0,)]*(gradL.ndim-1)+[(1,)],'constant',constant_values=(0))
 
 
 #Now sort through candidate edges
