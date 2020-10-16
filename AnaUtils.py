@@ -13,8 +13,8 @@ sampleWidth_ns = 10
 
 def ReadDDC10_BinWave(fName, doTime=True):
     waveInfo = {}
-    try:
-        with open(fName+'.bin','rb') as fp:
+    with open(fName+'.bin','rb') as fp:
+        try:
             Header = np.fromfile(fp,dtype=np.uint32,count=4)
 
             waveInfo['numEvents'] = int(Header[0])
@@ -23,12 +23,17 @@ def ReadDDC10_BinWave(fName, doTime=True):
             waveInfo['numChan'] = np.sum(waveInfo['chMap'])
             waveInfo['file'] = fName
             byteOrderPattern = hex(int(np.fromfile(fp,dtype=np.uint32,count=1)))
-
+            print(waveInfo)
+        except ValueError as e:
+            print(e)
+            return None
+        
+        try:
             waveArr = np.empty((waveInfo['numEvents']*waveInfo['numChan']*(waveInfo['numSamples']+6)),dtype=np.int16)
             waveArr[:-2] = np.fromfile(fp,dtype=np.int16)
-    except ValueError as e:
-        print(e)
-        return None
+        except ValueError as e:
+            print(e)
+            return None
     
     waveArr = np.reshape(waveArr.astype(dtype=np.float64)/adccperVolt,(waveInfo['numEvents'],waveInfo['numChan'],(waveInfo['numSamples']+6)))[...,2:-4]
 
@@ -37,7 +42,6 @@ def ReadDDC10_BinWave(fName, doTime=True):
             waveInfo['liveTimes_s'] = np.loadtxt(fl,delimiter=',',skiprows=5,max_rows=waveInfo['numEvents'],usecols=(2),dtype=np.float64)/(ClockDDC10)
             waveInfo['totliveTime_s'] = np.sum(waveInfo['liveTimes_s'])
             
-    print(waveInfo)
     return [waveArr,waveInfo]
 
 
@@ -70,6 +74,7 @@ def winQHist(wave,ch,init=175,end=250,nBins=10000,hrange=None,sub=False,evMask=T
         wmask *= wmask1
     qArr = 1e3*integrate.simps(evMask*wmask*wave[0][:,ch])*sampleWidth_ns/resistance_ohm
     ret = {'qData':qArr}
+    ret['dof'] = len(ret['qData'])-1
     if isinstance(hrange,Iterable):
         bRange = hrange[1]-hrange[0]
     else:

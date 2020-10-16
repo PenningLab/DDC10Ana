@@ -1,10 +1,11 @@
 import getpass
 import telnetlib
 import time
+import subprocess, os
 from datetime import date
 
 class IODDC10:
-	def __init__(self,HOST="192.168.1.3",nSam=8192,nEvs=10000,chMask='0x1',dataDir='/data/share/',password=None):
+	def __init__(self,HOST="192.168.1.102",nSam=8192,nEvs=10000,chMask='0x2',dataDir='/data/share/',password=None):
 		self.HOST = HOST
 		self.RFA = False
 		self.nSam = nSam
@@ -19,6 +20,8 @@ class IODDC10:
 			self.password = password
 
 	def setupDDC10(self,fade=6):
+		print("NOTE:::Restarting samba NEEDS system password")
+		os.system('sudo service smb restart')
 		self.tn.write(b"ls /mnt/share\n")
 		pout = self.tn.read_eager().decode('ascii')
 		pout += self.tn.read_until(b'root:/>',timeout=3).decode('ascii')
@@ -57,7 +60,7 @@ class IODDC10:
 		print(self.tn.read_until(b"----",timeout=3).decode('ascii'))
 		self.tn.read_eager()
 
-	def runAcq(self,outFile='data'):
+	def runAcq(self,outFile):
 		if self.RFA:
 			print('running Acquisition')
 			cmd = "time /mnt/share/binaries/DDC10_BinWaveCap_ChSel {0} {1} {2} /mnt/share/{3}.bin >> /mnt/share/{3}.log\n".format(self.chMask,self.nSam,self.nEvs,outFile)
