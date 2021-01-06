@@ -87,13 +87,13 @@ def fitQ(Qhist,P,bounds=(-np.inf,np.inf),doErr=False,dof=0):
         mchi2 = chisquare(my,gauss(mx,fit[0],fit[1],fit[2]),ddof=dof)
     return fit,tmp,mchi2
 
-def gpn(q,n,q0,q1,s0,s1,u):
+def gpn(q,n,q0,q1,s0,s1,u,yq=0,ys=1,Ny=0):
     if n==0:
-        return norm.pdf(q,q0,np.abs(s0))*float(poisson.pmf(0,u))# + expon.pdf(q,yq,ys)
+        return norm.pdf(q,q0,np.abs(s0))*float(poisson.pmf(0,u)) + Ny*expon.pdf(q,yq,ys)
     else:
         sn = s0*s0 + (n*s1*s1)
         gan = norm.pdf(q,q0+n*q1,np.sqrt(sn))*float(poisson.pmf(n,u))
-        return gan+gpn(q,n-1,q0,q1,s0,s1,u)
+        return gan+gpn(q,n-1,q0,q1,s0,s1,u,yq,ys)
 
 def fitQP(Qhist,P,N=50,doErr=False,dof=0):
     P = collections.OrderedDict(P)
@@ -110,8 +110,17 @@ def fitQP(Qhist,P,N=50,doErr=False,dof=0):
         my = my[args]
         merr = np.sqrt(Qhist[2][args]/(mN*mN))
         abSig = True
-        
-    fit,tmp = curve_fit(lambda q,q0,q1,s0,s1,u: gpn(q,N,q0,q1,s0,s1,u),mx,my,p0=list(P.values()),sigma=merr,absolute_sigma=abSig,maxfev=5000,ftol=1e-7,gtol=1e-7)
+
+    if 'yq' not in P and 'ys' not in P:
+        lambdgpn = lambda q,q0,q1,s0,s1,u: gpn(q,N,q0,q1,s0,s1,u)
+    elif 'yq' not in P:
+        P['yq'] = 0
+        lambdgpn = lambda q,q0,q1,s0,s1,u,yq,ys: gpn(q,N,q0,q1,s0,s1,u,yq,ys,1)
+    elif 'ys' not in P:
+        P['ys'] = 1
+        lambdgpn = lambda q,q0,q1,s0,s1,u,yq,ys: gpn(q,N,q0,q1,s0,s1,u,yq,ys,1)
+    
+    fit,tmp = curve_fit(lambdgpn,mx,my,p0=list(P.values()),sigma=merr,absolute_sigma=abSig,maxfev=10000,ftol=1e-8,gtol=1e-8)
     mchi2 = chisquare(my,gpn(mx,N,*fit),ddof=dof)
     #print(fit)
     params = P.copy()

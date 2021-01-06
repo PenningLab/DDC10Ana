@@ -21,11 +21,11 @@ class IODDC10:
 
 	def setupDDC10(self,fade=6):
 		print("NOTE:::Restarting samba NEEDS system password")
-		os.system('sudo service smb restart')
 		self.tn.write(b"ls /mnt/share\n")
 		pout = self.tn.read_eager().decode('ascii')
 		pout += self.tn.read_until(b'root:/>',timeout=3).decode('ascii')
 		if "No such file or directory" in pout:
+			os.system('sudo service smb restart')
 			self.tn.write(b"mkdir -p /mnt/share\n")
 			print("directory made")
 			if self.password:
@@ -75,7 +75,7 @@ class IODDC10:
 		else:
 			print("Not Ready For Acquisition!!!!\nHAVE YOU RUN SETUP?\n")
 
-	def loopAcq(self,nFiles=5,outDir='data'):
+	def loopAcq(self,nFiles=5,outDir='data',delay=0):
 		if self.RFA:
 			self.tn.write("mkdir -p /mnt/share/{}\n".format(outDir).encode('ascii'))
 			self.tn.write("ls /mnt/share/{}\n".format(outDir).encode('ascii'))
@@ -84,6 +84,7 @@ class IODDC10:
 			for i in range(nFiles):
 				self.runAcq("{0}/{1}".format(outDir,i))
 				print("Completed file {}".format(i))
+				time.sleep(delay)
 		else:
 			print("Not Ready For Acquisition!!!!\nHAVE YOU RUN SETUP?\n")
 
@@ -97,15 +98,15 @@ def DoSingle(nSam,nEvs,chMask,OutName,password='123'):
 	mDDC10.setupDDC10()
 	today = date.today()
 	print('Date: {}'.format(today.strftime("%y%m%d")))
-	mDDC10.runAcq(outFile="{0}_{1}_{2}_samples_{3}_events".format(OutName,today.strftime("%y%m%d"),nSam,nEvs))
+	mDDC10.runAcq(outFile="{0}_{1}_{2}_sam_{3}_evs".format(OutName,today.strftime("%y%m%d"),nSam,nEvs))
 	mDDC10.tn.close()
 
-def DoMany(nSam,nEvs,chMask,nFiles,OutName,password='123'):
+def DoMany(nSam,nEvs,chMask,nFiles,OutName,password='123',delay=0):
 	mDDC10 = IODDC10(nSam=nSam,nEvs=nEvs,chMask=chMask,password=password)
 	mDDC10.setupDDC10()
 	today = date.today()
 	print('Date: {}'.format(today.strftime("%y%m%d")))
-	mDDC10.loopAcq(nFiles=nFiles,outDir="{0}_{1}_{2}_samples_{3}_events".format(OutName,today.strftime("%y%m%d"),nSam,nEvs))
+	mDDC10.loopAcq(nFiles=nFiles,outDir="{0}_{1}_{2}_sam_{3}_evs".format(OutName,today.strftime("%y%m%d"),nSam,nEvs),delay=delay)
 	mDDC10.tn.close()
 
 def RepMany(nSam,nEvs,chMask,nFiles,OutName,nRuns=2,dT=86000,password='123'):

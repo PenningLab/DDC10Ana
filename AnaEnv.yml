@@ -213,5 +213,7 @@ dependencies:
   - zlib=1.2.11=h7b6447c_3
   - zstandard=0.13.0=py36he1b5a44_0
   - zstd=1.4.4=h3b9ef0a_1
+  - pip:
+    - usnparser==4.0.3
 prefix: /home/lzer/miniconda3/envs/DDC10Ana
 
