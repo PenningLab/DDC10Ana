@@ -5,7 +5,8 @@ import subprocess, os
 from datetime import date
 
 class IODDC10:
-	def __init__(self,HOST="192.168.1.102",nSam=8192,nEvs=10000,chMask='0x2',dataDir='/data/share/',password=None):
+	def __init__(self,SERVER="192.168.1.50",HOST="192.168.1.3",nSam=8192,nEvs=10000,chMask='0x2',dataDir='/data/share/',password=None):
+		self.SERVER = SERVER
 		self.HOST = HOST
 		self.RFA = False
 		self.nSam = nSam
@@ -19,28 +20,22 @@ class IODDC10:
 		else:
 			self.password = password
 
-	def setupDDC10(self,fade=6):
-		print("NOTE:::Restarting samba NEEDS system password")
+	def setupDDC10(self,fade=6,force=False):
+		print("NOTE:::Restarting samba NEEDS to run as root")
 		self.tn.write(b"ls /mnt/share\n")
 		pout = self.tn.read_eager().decode('ascii')
 		pout += self.tn.read_until(b'root:/>',timeout=3).decode('ascii')
-		if "No such file or directory" in pout:
-			os.system('sudo service smb restart')
+		if "No such file or directory" in pout or force:
+			if force:
+				os.system('service smb restart')
 			self.tn.write(b"mkdir -p /mnt/share\n")
 			print("directory made")
 			if self.password:
 				print("mounting samba")
-				self.tn.write(b"smbmount //192.168.1.100/SHARE /mnt/share -o username=lzer\n")
-				print("waiting for pass prompt")
-				pout = self.tn.read_eager().decode('ascii')
-				pout += self.tn.read_until(b"Password: ",timeout=3).decode('ascii')
-				while "Password:" not in pout:
-					print('failed to get prompt!! RETRY')
-					pout += self.tn.read_until(b"Password: ",timeout=3).decode('ascii')
-				self.tn.write(self.password.encode('ascii') + b"\n")
-				#self.tn.write(b"echo -------\n")
+				thiscmd = "smbmount //{}/SHARE /mnt/share -o username=lzer,password={}\n".format(self.SERVER,self.password)
+				self.tn.write(thiscmd.encode('ascii'))
 				passtst = self.tn.read_until(b"----",timeout=3).decode('ascii')
-				if len(passtst)>len("----"):
+				if "failed" not in passtst:
 					self.RFA = True
 					print("Ready for Acquisition")
 				else:
