@@ -7,7 +7,7 @@ import subprocess, os
 from datetime import date
 
 class IODDC10:
-	def __init__(self,SMBIP="192.168.1.50",DDCIP="192.168.1.3",nSam=8192,nEvs=10000,chMask='0x2',dataDir='/data/share/',password=None):
+	def __init__(self,SMBIP="192.168.1.50",DDCIP="192.168.1.3",nSam=8192,nEvs=10000,chMask='0x2',dataDir='/data/share/',password=None,conf={}):
 		self.SMBIP = SMBIP
 		self.DDCIP = DDCIP
 		self.RFA = False
@@ -16,6 +16,7 @@ class IODDC10:
 		self.chMask = chMask
 		self.dataDir = dataDir
 		self.tn = telnetlib.Telnet(self.DDCIP)
+		self.config = conf
 		print(self.tn.read_until(b'commands.',timeout=3).decode('ascii'))
 		if password is None:
 			self.password = getpass.getpass()
@@ -27,7 +28,8 @@ class IODDC10:
 		rPar = {}
 		with open(path) as file:
 			rPar = yaml.load(file,Loader=yaml.FullLoader)
-		return cls(SMBIP=rPar['smbip'],DDCIP=rPar['ddcip'],nSam=rPar['nsam'],nEvs=rPar['ntrg'],chMask=hex(int(rPar['chmask'],2)),dataDir=rPar['datadir'],password=rPar['passwd'])
+			print(rPar)
+		return cls(SMBIP=rPar['smbip'],DDCIP=rPar['ddcip'],nSam=rPar['nsam'],nEvs=rPar['ntrg'],chMask=hex(int(rPar['chmask'],2)),dataDir=rPar['datadir'],password=rPar['passwd'],conf=rPar)
 
 	def setupDDC10(self,fade=6,force=False):
 		print("NOTE:::Restarting samba NEEDS to run as root")
@@ -64,6 +66,21 @@ class IODDC10:
 		print(self.tn.read_until(b"----",timeout=3).decode('ascii'))
 		self.tn.read_eager()
 
+	def runSingle(self,outFile='data'):
+		if self.RFA:
+			print('running Acquisition')
+			cmd = "time /mnt/share/binaries/DDC10_BinWaveCap_ChSel {0} {1} {2} /mnt/share/{3}.bin >> /mnt/share/{3}.log\n".format(self.chMask,self.nSam,self.nEvs,outFile)
+			runStart = time.time()
+			self.tn.write(cmd.encode('ascii'))
+			print('waiting for run completion')
+			print(self.tn.read_until(b"sys").decode('ascii'))
+			print(self.tn.read_eager().decode('ascii'))
+			with open(self.dataDir+outFile+".log",'a') as logfile:
+				logfile.write(str(runStart)+"\n")
+			print(self.tn.read_eager().decode('ascii'))
+		else:
+			print("Not Ready For Acquisition!!!!\nHAVE YOU RUN SETUP?\n")
+
 	def runAcq(self,nFiles=1,outDir='data',delay=0):
 		if self.RFA:
 			self.tn.write("mkdir -p /mnt/share/{}\n".format(outDir).encode('ascii'))
@@ -71,7 +88,7 @@ class IODDC10:
 			print(self.tn.read_until(b"----",timeout=3).decode('ascii'))
 			print(self.tn.read_eager().decode('ascii'))
 			for i in range(nFiles):
-				self.runAcq("{0}/{0}_{1}".format(outDir,i))
+				self.runSingle("{0}/{0}_{1}".format(outDir,i))
 				print("Completed file {}".format(i))
 				time.sleep(delay)
 		else:
