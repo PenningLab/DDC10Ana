@@ -1,43 +1,52 @@
 import getpass
 import telnetlib
 import time
+import yaml
+
+import subprocess, os
 from datetime import date
 
 class IODDC10:
-	def __init__(self,HOST="192.168.1.3",nSam=8192,nEvs=10000,chMask='0x1',dataDir='/data/share/',password=None):
-		self.HOST = HOST
+	def __init__(self,SMBIP="192.168.1.50",DDCIP="192.168.1.3",nSam=8192,nEvs=10000,chMask='0x2',dataDir='/data/share/',password=None,conf={}):
+		self.SMBIP = SMBIP
+		self.DDCIP = DDCIP
 		self.RFA = False
 		self.nSam = nSam
 		self.nEvs = nEvs
 		self.chMask = chMask
 		self.dataDir = dataDir
-		self.tn = telnetlib.Telnet(self.HOST)
+		self.tn = telnetlib.Telnet(self.DDCIP)
+		self.config = conf
 		print(self.tn.read_until(b'commands.',timeout=3).decode('ascii'))
 		if password is None:
 			self.password = getpass.getpass()
 		else:
 			self.password = password
 
-	def setupDDC10(self,fade=5):
+	@classmethod
+	def from_yml(cls,path):
+		rPar = {}
+		with open(path) as file:
+			rPar = yaml.load(file,Loader=yaml.FullLoader)
+			print(rPar)
+		return cls(SMBIP=rPar['smbip'],DDCIP=rPar['ddcip'],nSam=rPar['nsam'],nEvs=rPar['ntrg'],chMask=hex(int(rPar['chmask'],2)),dataDir=rPar['datadir'],password=rPar['passwd'],conf=rPar)
+
+	def setupDDC10(self,fade=6,force=False):
+		print("NOTE:::Restarting samba NEEDS to run as root")
 		self.tn.write(b"ls /mnt/share\n")
 		pout = self.tn.read_eager().decode('ascii')
 		pout += self.tn.read_until(b'root:/>',timeout=3).decode('ascii')
-		if "No such file or directory" in pout:
+		if "No such file or directory" in pout or force:
+			if force:
+				os.system('service smb restart')
 			self.tn.write(b"mkdir -p /mnt/share\n")
 			print("directory made")
 			if self.password:
 				print("mounting samba")
-				self.tn.write(b"smbmount //192.168.1.100/SHARE /mnt/share -o username=lzer\n")
-				print("waiting for pass prompt")
-				pout = self.tn.read_eager().decode('ascii')
-				pout += self.tn.read_until(b"Password: ",timeout=3).decode('ascii')
-				while "Password:" not in pout:
-					print('failed to get prompt!! RETRY')
-					pout += self.tn.read_until(b"Password: ",timeout=3).decode('ascii')
-				self.tn.write(self.password.encode('ascii') + b"\n")
-				#self.tn.write(b"echo -------\n")
+				thiscmd = "smbmount //{}/SHARE /mnt/share -o username=lzer,password={}\n".format(self.SMBIP,self.password)
+				self.tn.write(thiscmd.encode('ascii'))
 				passtst = self.tn.read_until(b"----",timeout=3).decode('ascii')
-				if len(passtst)>len("----"):
+				if "failed" not in passtst:
 					self.RFA = True
 					print("Ready for Acquisition")
 				else:
@@ -57,7 +66,7 @@ class IODDC10:
 		print(self.tn.read_until(b"----",timeout=3).decode('ascii'))
 		self.tn.read_eager()
 
-	def runAcq(self,outFile='data'):
+	def runSingle(self,outFile='data'):
 		if self.RFA:
 			print('running Acquisition')
 			cmd = "time /mnt/share/binaries/DDC10_BinWaveCap_ChSel {0} {1} {2} /mnt/share/{3}.bin >> /mnt/share/{3}.log\n".format(self.chMask,self.nSam,self.nEvs,outFile)
@@ -72,38 +81,15 @@ class IODDC10:
 		else:
 			print("Not Ready For Acquisition!!!!\nHAVE YOU RUN SETUP?\n")
 
-	def loopAcq(self,nFiles=5,outDir='data'):
+	def runAcq(self,nFiles=1,outDir='data',delay=0):
 		if self.RFA:
 			self.tn.write("mkdir -p /mnt/share/{}\n".format(outDir).encode('ascii'))
 			self.tn.write("ls /mnt/share/{}\n".format(outDir).encode('ascii'))
 			print(self.tn.read_until(b"----",timeout=3).decode('ascii'))
 			print(self.tn.read_eager().decode('ascii'))
 			for i in range(nFiles):
-				self.runAcq("{0}/{1}".format(outDir,i))
+				self.runSingle("{0}/{0}_{1}".format(outDir,i))
 				print("Completed file {}".format(i))
+				time.sleep(delay)
 		else:
 			print("Not Ready For Acquisition!!!!\nHAVE YOU RUN SETUP?\n")
-
-def DoSingle(nSam,nEvs,chMask,OutName,password='123'):
-	mDDC10 = IODDC10(nSam=nSam,nEvs=nEvs,chMask=chMask,password=password)
-	mDDC10.setupDDC10()
-	today = date.today()
-	print('Date: {}'.format(today.strftime("%y%m%d")))
-	mDDC10.runAcq(outFile="{0}_{1}_{2}_samples_{3}_events".format(OutName,today.strftime("%y%m%d"),nSam,nEvs))
-	mDDC10.tn.close()
-
-def DoMany(nSam,nEvs,chMask,nFiles,OutName,password='123'):
-	mDDC10 = IODDC10(nSam=nSam,nEvs=nEvs,chMask=chMask,password=password)
-	mDDC10.setupDDC10()
-	today = date.today()
-	print('Date: {}'.format(today.strftime("%y%m%d")))
-	mDDC10.loopAcq(nFiles=nFiles,outDir="{0}_{1}_{2}_samples_{3}_events".format(OutName,today.strftime("%y%m%d"),nSam,nEvs))
-	mDDC10.tn.close()
-
-def RepMany(nSam,nEvs,chMask,nFiles,OutName,nRuns=2,dT=86000,password='123'):
-	run=0
-	while day<nRuns:
-		DoMany(nSam,nEvs,chMask,nFiles,OutName,password)
-		run += 1
-		print('sleeping')
-		time.sleep(dT)
