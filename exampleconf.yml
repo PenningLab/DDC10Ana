@@ -12,5 +12,5 @@ fade: 6 #fade clock setting
 force: False #force samba connection restart
 postTrg: 8000 # samples after trigger
 trgmask: '0000000010' #channels used for trigger; 9 digit little endian binary, 1 triggers on channel: This example triggers on channel 1
-trgThresh: [1] #trigger threshold for channels in ascending order of trigger channel num
+trgThresh: [0] #trigger threshold for channels in ascending order of trigger channel num
 invmask: '0011111100' #inverted channels; 9 digit little endian binary, 1 inverts channel: This example inverts channels 2-7
