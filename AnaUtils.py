@@ -1,10 +1,13 @@
 import numpy as np
 import uproot
 import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
+from scipy.stats import norm,poisson,expon,chisquare
 from scipy import integrate
 import awkward as awk
 from pylab import rcParams
 rcParams['figure.figsize'] = 15, 11
+import collections
 
 ClockDDC10 = 6e8
 adccperVolt = 8192
@@ -94,7 +97,7 @@ def winQHist(wave,ch,init=175,end=250,nBins=10000,hrange=None,sub=False,evMask=T
         tmpQ[2] *= np.square(bTot/float(wave[1]['totliveTime_s']))
     tmpQ.append(np.nonzero(tmpQ[2])[0])
     
-    ret['qHist'] = tuple(tmpQ)
+    ret['qHist'] = list(tmpQ)
     return ret
 
 import matplotlib as mpl
@@ -112,11 +115,15 @@ def peakHist(waveArr,chan=0,yrange=None,yscale=1,ret=False,doplot=True):
         plt.ylabel("peak Amplitude (mV)")
         if isinstance(yrange,(tuple,list)):
             plt.ylim(yrange)
+        maxT = np.argmax(np.sum(pHist[0],axis=1))
+        plt.xlim(pHist[1][maxT]-100,pHist[1][maxT]+100)
         plt.show()
         plt.plot(pHist[1][:-1],np.sum(pHist[0],axis=1))
+        plt.yscale('log')
         plt.xlabel("peak Time (samples)")
         plt.show()
         plt.plot(pHist[2][:-1],np.sum(pHist[0],axis=0))
+        plt.yscale('log')
         plt.xlabel("peak Amplitude (mV)")
         plt.show()
     if ret:
@@ -132,6 +139,76 @@ def plotWaves(waveArr,chan=0,nWaves=100):
     plt.ylabel('V')
     plt.show()
     return plt.gcf()
+
+def gpn(q,n,q0,q1,s0,s1,u):
+    if n==0:
+        return norm.pdf(q,q0,np.abs(s0))*float(poisson.pmf(0,u))
+    else:
+        sn = s0*s0 + (n*s1*s1)
+        gan = norm.pdf(q,q0+n*q1,np.sqrt(sn))*float(poisson.pmf(n,u))
+        return gan+gpn(q,n-1,q0,q1,s0,s1,u)
+def gpn2(q,n,q0,q1,s0,s1,u,Na=1):
+    return Na*gpn(q,n,q0,q1,s0,s1,u)
+
+def g2(q,q0,q1,s0,s1):
+		return norm.pdf(q,q0,np.abs(s0)) + norm.pdf(q,q1,np.abs(s1))
+
+def fitQ(Qhist,P,doErr=False,dof=0):
+    P = collections.OrderedDict(P)
+    
+    ng = len(P)
+    mx = Qhist[1]
+    mN = Qhist[0].sum()*(mx[1]-mx[0])
+    my = Qhist[0]/mN
+    merr = None
+    abSig = None
+    if doErr:
+        args = Qhist[3]
+        mx = mx[args]
+        my = my[args]
+        merr = np.sqrt(Qhist[2][args]/(mN*mN))
+        abSig = True
+    lambdg = lambda q,q0,q1,s0,s1: g2(q,q0,q1,s0,s1)
+    
+    fit,tmp = curve_fit(lambdg,mx,my,p0=list(P.values()),bounds=([-1,0,0,0],np.inf),sigma=merr,absolute_sigma=abSig,maxfev=10000,ftol=1e-8,gtol=1e-8)
+    mchi2 = chisquare(my,g2(mx,*fit),ddof=dof)
+    #print(fit)
+    params = P.copy()
+    params.update(zip(params,fit))
+    paramerr = params.copy()
+    paramerr.update(zip(paramerr,np.diag(tmp)))
+    params['chi2'] = mchi2
+    params['norm'] = mN
+    return params,paramerr
+
+def fitQP(Qhist,P,N=50,doErr=False,dof=0):
+    P['Na'] = 1
+    P = collections.OrderedDict(P)
+    
+    ng = len(P)
+    mx = Qhist[1]
+    mN = Qhist[0].sum()*(mx[1]-mx[0])
+    my = Qhist[0]/mN
+    merr = None
+    abSig = None
+    if doErr:
+        args = Qhist[3]
+        mx = mx[args]
+        my = my[args]
+        merr = np.sqrt(Qhist[2][args]/(mN*mN))
+        abSig = True
+    lambdgpn = lambda q,q0,q1,s0,s1,u,Na: gpn2(q,N,q0,q1,s0,s1,u,Na)
+    
+    fit,tmp = curve_fit(lambdgpn,mx,my,p0=list(P.values()),bounds=([-np.inf,-np.inf,0,0,0,-np.inf],np.inf),sigma=merr,absolute_sigma=abSig,maxfev=10000,ftol=1e-8,gtol=1e-8)
+    mchi2 = chisquare(my,gpn2(mx,N,*fit),ddof=dof)
+    #print(fit)
+    params = P.copy()
+    params.update(zip(params,fit))
+    paramerr = params.copy()
+    paramerr.update(zip(paramerr,np.diag(tmp)))
+    params['chi2'] = mchi2
+    params['norm'] = mN
+    return params,paramerr
     
 #Pulse Finding 
 #create kernel for Laplacian of Gaussian edge finding filter
