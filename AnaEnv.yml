@@ -214,6 +214,12 @@ dependencies:
   - zstandard=0.13.0=py36he1b5a44_0
   - zstd=1.4.4=h3b9ef0a_1
   - pip:
-    - pyyaml==5.4.1
-    - usnparser==4.0.3
-prefix: /home/lzer/miniconda3/envs/DDC10Ana
+    - future==0.18.2
+    - ipython-genutils==0.2.0
+    - packaging==20.9
+    - physt==0.5.0.1
+    - pymongo==3.11.4
+    - pypdf2==1.26.0
+    - tqdm==4.56.2
+    - uncertainties==3.1.7
+prefix: /global/homes/l/lkorley/miniconda3/envs/DDC10Ana
