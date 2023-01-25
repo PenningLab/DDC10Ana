@@ -199,7 +199,7 @@ def fitQP(Qhist,P,N=50,doErr=False,dof=0):
         abSig = True
     lambdgpn = lambda q,q0,q1,s0,s1,u,Na: gpn2(q,N,q0,q1,s0,s1,u,Na)
     
-    fit,tmp = curve_fit(lambdgpn,mx,my,p0=list(P.values()),bounds=([-np.inf,-np.inf,0,0,0,-np.inf],np.inf),sigma=merr,absolute_sigma=abSig,maxfev=10000,ftol=1e-8,gtol=1e-8)
+    fit,tmp = curve_fit(lambdgpn,mx,my,p0=list(P.values()),bounds=([-np.inf,0,0,0,0,0],np.inf),sigma=merr,absolute_sigma=abSig,maxfev=10000,ftol=1e-8,gtol=1e-8)
     mchi2 = chisquare(my,gpn2(mx,N,*fit),ddof=dof)
     #print(fit)
     params = P.copy()
